@@ -25,7 +25,7 @@ func (s *Store) AddMember(tripID, name, email string) (*models.Member, error) {
 }
 
 func (s *Store) ListMembers(tripID string) ([]models.Member, error) {
-	rows, err := s.db.Query(`SELECT id, trip_id, name, email FROM members WHERE trip_id = $1`, tripID)
+	rows, err := s.db.Query(`SELECT id, trip_id, name, COALESCE(email,'') FROM members WHERE trip_id = $1`, tripID)
 	if err != nil {
 		return nil, err
 	}

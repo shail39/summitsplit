@@ -27,7 +27,7 @@ func (s *Store) CreateTrip(name, description, currency string) (*models.Trip, er
 }
 
 func (s *Store) GetTrip(id string) (*models.Trip, error) {
-	row := s.db.QueryRow(`SELECT id, name, description, currency, created_at FROM trips WHERE id = $1`, id)
+	row := s.db.QueryRow(`SELECT id, name, COALESCE(description,''), currency, created_at FROM trips WHERE id = $1`, id)
 	t := &models.Trip{}
 	if err := row.Scan(&t.ID, &t.Name, &t.Description, &t.Currency, &t.CreatedAt); err != nil {
 		return nil, fmt.Errorf("get trip: %w", err)
@@ -36,7 +36,7 @@ func (s *Store) GetTrip(id string) (*models.Trip, error) {
 }
 
 func (s *Store) ListTrips() ([]models.Trip, error) {
-	rows, err := s.db.Query(`SELECT id, name, description, currency, created_at FROM trips ORDER BY created_at DESC`)
+	rows, err := s.db.Query(`SELECT id, name, COALESCE(description,''), currency, created_at FROM trips ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
