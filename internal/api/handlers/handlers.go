@@ -15,12 +15,17 @@ import (
 
 type Handler struct {
 	store *store.Store
-	tmpl  *template.Template
+	tmpls map[string]*template.Template
 }
 
 func New(s *store.Store) *Handler {
-	tmpl := template.Must(template.ParseGlob(filepath.Join("web", "templates", "*.html")))
-	return &Handler{store: s, tmpl: tmpl}
+	base := filepath.Join("web", "templates", "base.html")
+	pages := []string{"home.html", "trip_new.html", "trip_detail.html", "expense_new.html", "settle.html"}
+	tmpls := make(map[string]*template.Template, len(pages))
+	for _, p := range pages {
+		tmpls[p] = template.Must(template.ParseFiles(base, filepath.Join("web", "templates", p)))
+	}
+	return &Handler{store: s, tmpls: tmpls}
 }
 
 // --- Web UI handlers ---
@@ -251,8 +256,13 @@ func (h *Handler) APISettlements(w http.ResponseWriter, r *http.Request) {
 // --- helpers ---
 
 func (h *Handler) render(w http.ResponseWriter, name string, data any) {
+	tmpl, ok := h.tmpls[name]
+	if !ok {
+		http.Error(w, "template not found: "+name, http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html")
-	if err := h.tmpl.ExecuteTemplate(w, name, data); err != nil {
+	if err := tmpl.ExecuteTemplate(w, name, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
