@@ -1,0 +1,20 @@
+[Unit]
+Description=SummitSplit
+After=network.target docker.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/summitsplit
+ExecStart=/opt/summitsplit/summitsplit
+Restart=on-failure
+
+# Use a port that doesn't conflict with your existing Go app (adjust if needed)
+Environment=PORT=8081
+# Postgres is running in a container — connect via its published host port
+# Replace CONTAINER_PG_PORT with the host port your postgres container publishes
+# (check with: docker ps | grep postgres)
+Environment=DATABASE_URL=postgres://summitsplit:changeme@localhost:CONTAINER_PG_PORT/summitsplit?sslmode=disable
+
+[Install]
+WantedBy=multi-user.target

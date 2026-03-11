@@ -1,0 +1,6 @@
+# Add this block to your existing Caddyfile on the server.
+# Do NOT replace the whole file — just append this site block.
+
+summitsplit.your-domain.com {
+    reverse_proxy localhost:8081
+}

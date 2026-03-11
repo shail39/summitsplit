@@ -1,0 +1,37 @@
+{{template "base" .}}
+
+{{define "title"}}- Add Expense{{end}}
+
+{{define "content"}}
+<div class="page-header">
+  <h1>Add Expense</h1>
+  <a href="/trips/{{.Trip.ID}}" class="btn btn-secondary">Back</a>
+</div>
+<form method="POST" action="/trips/{{.Trip.ID}}/expenses" class="form">
+  <label>Description
+    <input type="text" name="description" placeholder="e.g. Campsite fee" required autofocus>
+  </label>
+  <label>Amount ({{.Trip.Currency}})
+    <input type="number" name="amount" step="0.01" min="0.01" placeholder="0.00" required>
+  </label>
+  <label>Paid By
+    <select name="paid_by" required>
+      {{range .Members}}
+      <option value="{{.ID}}">{{.Name}}</option>
+      {{end}}
+    </select>
+  </label>
+  <label>Category
+    <select name="category">
+      {{range .Categories}}
+      <option value="{{.}}">{{.}}</option>
+      {{end}}
+    </select>
+  </label>
+  <label>Date
+    <input type="date" name="date" value="{{.Today}}" required>
+  </label>
+  <p class="muted">Split will be divided equally among all {{len .Members}} members.</p>
+  <button type="submit" class="btn btn-primary">Add Expense</button>
+</form>
+{{end}}

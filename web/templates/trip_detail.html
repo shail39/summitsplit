@@ -1,0 +1,93 @@
+{{template "base" .}}
+
+{{define "title"}}- {{.Trip.Name}}{{end}}
+
+{{define "content"}}
+<div class="page-header">
+  <h1>{{.Trip.Name}}</h1>
+  <a href="/trips/{{.Trip.ID}}/settle" class="btn btn-secondary">Settle Up</a>
+</div>
+{{if .Trip.Description}}<p class="trip-desc">{{.Trip.Description}}</p>{{end}}
+
+<!-- Invite link -->
+<div class="card invite-card">
+  <h2>Invite link</h2>
+  <p class="muted">Anyone with this link can view and add expenses to this trip.</p>
+  <div class="invite-row">
+    <input id="invite-url" type="text" value="{{.InviteURL}}" readonly>
+    <button class="btn btn-sm" onclick="copyInvite()">Copy</button>
+  </div>
+  <span id="copy-confirm" class="copy-confirm" hidden>Copied!</span>
+</div>
+
+<div class="two-col">
+  <!-- Members -->
+  <section class="card">
+    <h2>Members</h2>
+    {{if .Members}}
+    <ul class="member-list">
+      {{range .Members}}
+      <li>{{.Name}}{{if .Email}} <span class="muted">({{.Email}})</span>{{end}}</li>
+      {{end}}
+    </ul>
+    {{else}}<p class="muted">No members yet.</p>{{end}}
+    <form method="POST" action="/trips/{{.Trip.ID}}/members" class="inline-form">
+      <input type="text" name="name" placeholder="Name" required>
+      <input type="email" name="email" placeholder="Email (optional)">
+      <button class="btn btn-sm">Add</button>
+    </form>
+  </section>
+
+  <!-- Balances -->
+  <section class="card">
+    <h2>Balances</h2>
+    {{if .Balances}}
+    <ul class="balance-list">
+      {{range .Balances}}
+      <li class="{{if gt .NetBalance 0.0}}positive{{else if lt .NetBalance 0.0}}negative{{end}}">
+        <span>{{.Member.Name}}</span>
+        <span>{{if gt .NetBalance 0.0}}+{{end}}{{printf "%.2f" .NetBalance}} {{$.Trip.Currency}}</span>
+      </li>
+      {{end}}
+    </ul>
+    {{else}}<p class="muted">Add expenses to see balances.</p>{{end}}
+  </section>
+</div>
+
+<!-- Expenses -->
+<section class="card">
+  <div class="section-header">
+    <h2>Expenses</h2>
+    <a href="/trips/{{.Trip.ID}}/expenses/new" class="btn btn-sm btn-primary">+ Add Expense</a>
+  </div>
+  {{if .Expenses}}
+  <table class="expense-table">
+    <thead>
+      <tr><th>Date</th><th>Description</th><th>Category</th><th>Amount</th><th>Paid By</th></tr>
+    </thead>
+    <tbody>
+      {{range .Expenses}}
+      <tr>
+        <td>{{.Date.Format "Jan 2"}}</td>
+        <td>{{.Description}}</td>
+        <td><span class="tag">{{.Category}}</span></td>
+        <td>{{printf "%.2f" .Amount}}</td>
+        <td>{{.PaidByID}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}<p class="muted">No expenses yet.</p>{{end}}
+</section>
+
+<script>
+function copyInvite() {
+  const input = document.getElementById('invite-url');
+  navigator.clipboard.writeText(input.value).then(function() {
+    const confirm = document.getElementById('copy-confirm');
+    confirm.hidden = false;
+    setTimeout(function() { confirm.hidden = true; }, 2000);
+  });
+}
+</script>
+{{end}}

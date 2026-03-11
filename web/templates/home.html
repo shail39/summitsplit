@@ -1,0 +1,28 @@
+{{template "base" .}}
+
+{{define "title"}}- Home{{end}}
+
+{{define "content"}}
+<div class="home-hero">
+  <h1>Split trip expenses,<br>settle up fairly.</h1>
+  <p class="hero-sub">Create a trip and share the link — anyone with it can join.</p>
+</div>
+
+<div class="home-actions">
+  <div class="card">
+    <h2>Start a new trip</h2>
+    <p class="muted">Create a group and invite your crew by sharing the link.</p>
+    <a href="/trips/new" class="btn btn-primary btn-full">+ New Trip</a>
+  </div>
+
+  <div class="card">
+    <h2>Join an existing trip</h2>
+    <p class="muted">Paste the invite link or enter the trip code you received.</p>
+    <form method="POST" action="/join" class="join-form">
+      <input type="text" name="code" placeholder="Paste link or trip code" required autofocus>
+      <button class="btn btn-secondary btn-full">Join Trip</button>
+    </form>
+    {{if .Error}}<p class="error-msg">{{.Error}}</p>{{end}}
+  </div>
+</div>
+{{end}}

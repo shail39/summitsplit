@@ -1,0 +1,28 @@
+{{template "base" .}}
+
+{{define "title"}}- New Trip{{end}}
+
+{{define "content"}}
+<div class="page-header">
+  <h1>New Trip</h1>
+</div>
+<form method="POST" action="/trips" class="form">
+  <label>Trip Name
+    <input type="text" name="name" placeholder="e.g. Yosemite 2025" required autofocus>
+  </label>
+  <label>Description
+    <textarea name="description" placeholder="Optional description"></textarea>
+  </label>
+  <label>Currency
+    <select name="currency">
+      <option value="USD">USD ($)</option>
+      <option value="EUR">EUR (€)</option>
+      <option value="GBP">GBP (£)</option>
+      <option value="INR">INR (₹)</option>
+      <option value="CAD">CAD (C$)</option>
+      <option value="AUD">AUD (A$)</option>
+    </select>
+  </label>
+  <button type="submit" class="btn btn-primary">Create Trip</button>
+</form>
+{{end}}
