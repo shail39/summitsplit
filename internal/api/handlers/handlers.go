@@ -59,6 +59,11 @@ func (h *Handler) TripDetail(w http.ResponseWriter, r *http.Request) {
 	expenses, _ := h.store.ListExpenses(id)
 	balances, _ := h.store.Balances(id)
 
+	memberMap := make(map[string]string, len(members))
+	for _, m := range members {
+		memberMap[m.ID] = m.Name
+	}
+
 	scheme := "https"
 	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" {
 		scheme = "http"
@@ -68,6 +73,7 @@ func (h *Handler) TripDetail(w http.ResponseWriter, r *http.Request) {
 	h.render(w, "trip_detail.html", map[string]any{
 		"Trip":      trip,
 		"Members":   members,
+		"MemberMap": memberMap,
 		"Expenses":  expenses,
 		"Balances":  balances,
 		"InviteURL": inviteURL,

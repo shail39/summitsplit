@@ -72,7 +72,7 @@
         <td>{{.Description}}</td>
         <td><span class="tag">{{.Category}}</span></td>
         <td>{{printf "%.2f" .Amount}}</td>
-        <td>{{.PaidByID}}</td>
+        <td>{{index $.MemberMap .PaidByID}}</td>
       </tr>
       {{end}}
     </tbody>
