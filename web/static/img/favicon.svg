@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Background -->
+  <rect width="32" height="32" rx="6" fill="#1e293b"/>
+  <!-- Back mountain -->
+  <polygon points="18,26 26,10 34,26" fill="#475569"/>
+  <!-- Front mountain -->
+  <polygon points="4,26 16,6 28,26" fill="#f1f5f9"/>
+  <!-- Snow cap -->
+  <polygon points="16,6 12,14 20,14" fill="#ffffff"/>
+  <!-- Split line -->
+  <line x1="16" y1="17" x2="16" y2="26" stroke="#f97316" stroke-width="2" stroke-linecap="round"/>
+</svg>

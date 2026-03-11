@@ -6,10 +6,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SummitSplit {{block "title" .}}{{end}}</title>
   <link rel="stylesheet" href="/static/css/main.css">
+  <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
 </head>
 <body>
   <nav class="navbar">
-    <a href="/" class="brand">⛰ SummitSplit</a>
+    <a href="/" class="brand">
+      <img src="/static/img/logo.svg" alt="SummitSplit" class="nav-logo">
+    </a>
   </nav>
   <main class="container">
     {{block "content" .}}{{end}}
