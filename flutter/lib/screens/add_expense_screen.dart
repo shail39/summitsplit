@@ -8,12 +8,14 @@ class AddExpenseScreen extends StatefulWidget {
   final String tripId;
   final List<Member> members;
   final String currency;
+  final String? defaultPaidById;
 
   const AddExpenseScreen({
     super.key,
     required this.tripId,
     required this.members,
     required this.currency,
+    this.defaultPaidById,
   });
 
   @override
@@ -40,7 +42,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   @override
   void initState() {
     super.initState();
-    _paidById = widget.members.isNotEmpty ? widget.members.first.id : null;
+    _paidById = widget.defaultPaidById ?? (widget.members.isNotEmpty ? widget.members.first.id : null);
     _included = {for (var m in widget.members) m.id: true};
     _exactCtrls = {for (var m in widget.members) m.id: TextEditingController()};
     _shareCtrls = {for (var m in widget.members) m.id: TextEditingController(text: '1')};
@@ -144,14 +146,14 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              initialValue: _paidById,
+              value: _paidById,
               decoration: const InputDecoration(labelText: 'Paid by', border: OutlineInputBorder()),
               items: widget.members.map((m) => DropdownMenuItem(value: m.id, child: Text(m.name))).toList(),
               onChanged: (v) => setState(() => _paidById = v),
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              initialValue: _category,
+              value: _category,
               decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
               items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c[0].toUpperCase() + c.substring(1)))).toList(),
               onChanged: (v) => setState(() => _category = v!),

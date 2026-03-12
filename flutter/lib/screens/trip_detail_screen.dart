@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../api/api_client.dart';
 import '../models/models.dart';
 import 'add_expense_screen.dart';
@@ -23,17 +24,37 @@ class _TripDetailScreenState extends State<TripDetailScreen>
   List<Settlement> _settlements = [];
   bool _loading = true;
 
+  String? _myMemberId; // current user's identity in this trip
+
+  String get _prefsKey => 'identity_${widget.tripId}';
+
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: 3, vsync: this);
-    _load();
+    _loadIdentityAndData();
   }
 
   @override
   void dispose() {
     _tabs.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadIdentityAndData() async {
+    final prefs = await SharedPreferences.getInstance();
+    _myMemberId = prefs.getString(_prefsKey);
+    await _load();
+    // After loading, if no identity set and members exist, ask
+    if (_myMemberId == null && _members.isNotEmpty && mounted) {
+      _showIdentityPicker();
+    }
+  }
+
+  Future<void> _saveIdentity(String memberId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefsKey, memberId);
+    setState(() => _myMemberId = memberId);
   }
 
   Future<void> _load() async {
@@ -66,6 +87,44 @@ class _TripDetailScreenState extends State<TripDetailScreen>
   String _memberName(String id) =>
       _members.firstWhere((m) => m.id == id, orElse: () => Member(id: id, tripId: '', name: id, email: '')).name;
 
+  Member? get _me => _myMemberId == null
+      ? null
+      : _members.cast<Member?>().firstWhere((m) => m?.id == _myMemberId, orElse: () => null);
+
+  void _showIdentityPicker() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Who are you?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Select your name to personalize this trip.', style: TextStyle(color: Colors.grey[600])),
+            const SizedBox(height: 16),
+            ..._members.map((m) => ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: const Color(0xFF2d6a4f).withValues(alpha: 0.12),
+                    child: Text(m.name[0].toUpperCase(), style: const TextStyle(color: Color(0xFF2d6a4f), fontWeight: FontWeight.bold)),
+                  ),
+                  title: Text(m.name),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _saveIdentity(m.id);
+                  },
+                )),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Skip'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -82,6 +141,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
     }
 
     final inviteUrl = 'https://app.summitsplit.com/trips/${widget.tripId}';
+    final me = _me;
 
     return Scaffold(
       appBar: AppBar(
@@ -98,6 +158,25 @@ class _TripDetailScreenState extends State<TripDetailScreen>
           ],
         ),
         actions: [
+          // Identity indicator
+          if (me != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: GestureDetector(
+                onTap: _showIdentityPicker,
+                child: Chip(
+                  avatar: CircleAvatar(
+                    backgroundColor: Colors.white,
+                    child: Text(me.name[0].toUpperCase(), style: const TextStyle(color: Color(0xFF2d6a4f), fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+                  label: Text(me.name, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                  backgroundColor: Colors.white24,
+                  side: BorderSide.none,
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ),
           IconButton(
             icon: const Icon(Icons.link),
             tooltip: 'Copy invite link',
@@ -116,11 +195,12 @@ class _TripDetailScreenState extends State<TripDetailScreen>
             trip: _trip!,
             expenses: _expenses,
             members: _members,
+            myMemberId: _myMemberId,
             memberName: _memberName,
             onAddMember: () => _showAddMemberDialog(),
             onAddExpense: () => _goAddExpense(),
           ),
-          _BalancesTab(balances: _balances, currency: _trip!.currency),
+          _BalancesTab(balances: _balances, currency: _trip!.currency, myMemberId: _myMemberId),
           _SettleTab(
             settlements: _settlements,
             currency: _trip!.currency,
@@ -149,7 +229,11 @@ class _TripDetailScreenState extends State<TripDetailScreen>
             onPressed: () async {
               if (nameCtrl.text.trim().isEmpty) return;
               Navigator.pop(ctx);
-              await ApiClient.addMember(widget.tripId, nameCtrl.text.trim(), emailCtrl.text.trim());
+              final member = await ApiClient.addMember(widget.tripId, nameCtrl.text.trim(), emailCtrl.text.trim());
+              // If no identity yet, auto-set to newly added member
+              if (_myMemberId == null) {
+                await _saveIdentity(member.id);
+              }
               _load();
             },
             child: const Text('Add'),
@@ -161,7 +245,12 @@ class _TripDetailScreenState extends State<TripDetailScreen>
 
   Future<void> _goAddExpense() async {
     await Navigator.push(context, MaterialPageRoute(
-      builder: (_) => AddExpenseScreen(tripId: widget.tripId, members: _members, currency: _trip!.currency),
+      builder: (_) => AddExpenseScreen(
+        tripId: widget.tripId,
+        members: _members,
+        currency: _trip!.currency,
+        defaultPaidById: _myMemberId,
+      ),
     ));
     _load();
   }
@@ -195,6 +284,7 @@ class _ExpensesTab extends StatelessWidget {
   final Trip trip;
   final List<Expense> expenses;
   final List<Member> members;
+  final String? myMemberId;
   final String Function(String) memberName;
   final VoidCallback onAddMember;
   final VoidCallback onAddExpense;
@@ -203,6 +293,7 @@ class _ExpensesTab extends StatelessWidget {
     required this.trip,
     required this.expenses,
     required this.members,
+    required this.myMemberId,
     required this.memberName,
     required this.onAddMember,
     required this.onAddExpense,
@@ -212,7 +303,6 @@ class _ExpensesTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(children: [
       ListView(padding: const EdgeInsets.all(16), children: [
-        // Members row
         Row(children: [
           const Text('Members', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
           const Spacer(),
@@ -224,14 +314,17 @@ class _ExpensesTab extends StatelessWidget {
         ]),
         const SizedBox(height: 8),
         if (members.isEmpty)
-          Text('No members yet.', style: TextStyle(color: Colors.grey[500]))
+          Text('No members yet. Add yourself first!', style: TextStyle(color: Colors.grey[500]))
         else
           Wrap(
             spacing: 8,
-            children: members.map((m) => Chip(label: Text(m.name))).toList(),
+            children: members.map((m) => Chip(
+              label: Text(m.name),
+              backgroundColor: m.id == myMemberId ? const Color(0xFF2d6a4f).withValues(alpha: 0.15) : null,
+              side: m.id == myMemberId ? const BorderSide(color: Color(0xFF2d6a4f)) : null,
+            )).toList(),
           ),
         const Divider(height: 28),
-        // Expenses list
         if (expenses.isEmpty)
           Center(
             child: Padding(
@@ -248,6 +341,7 @@ class _ExpensesTab extends StatelessWidget {
                 expense: e,
                 currency: trip.currency,
                 paidByName: memberName(e.paidById),
+                isMe: e.paidById == myMemberId,
               )),
         const SizedBox(height: 80),
       ]),
@@ -268,8 +362,9 @@ class _ExpenseTile extends StatelessWidget {
   final Expense expense;
   final String currency;
   final String paidByName;
+  final bool isMe;
 
-  const _ExpenseTile({required this.expense, required this.currency, required this.paidByName});
+  const _ExpenseTile({required this.expense, required this.currency, required this.paidByName, this.isMe = false});
 
   static const _categoryIcons = {
     'food': Icons.restaurant,
@@ -287,15 +382,16 @@ class _ExpenseTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: Colors.grey.shade100),
+        side: BorderSide(color: isMe ? const Color(0xFF2d6a4f).withValues(alpha: 0.3) : Colors.grey.shade100),
       ),
+      color: isMe ? const Color(0xFF2d6a4f).withValues(alpha: 0.04) : null,
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+          backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
           child: Icon(icon, color: Theme.of(context).colorScheme.primary, size: 20),
         ),
         title: Text(expense.description, style: const TextStyle(fontWeight: FontWeight.w500)),
-        subtitle: Text('Paid by $paidByName · ${_fmtDate(expense.date)}',
+        subtitle: Text('Paid by ${isMe ? "you" : paidByName} · ${_fmtDate(expense.date)}',
             style: const TextStyle(fontSize: 12)),
         trailing: Text(
           '$currency ${expense.amount.toStringAsFixed(2)}',
@@ -314,20 +410,32 @@ class _ExpenseTile extends StatelessWidget {
 class _BalancesTab extends StatelessWidget {
   final List<Balance> balances;
   final String currency;
+  final String? myMemberId;
 
-  const _BalancesTab({required this.balances, required this.currency});
+  const _BalancesTab({required this.balances, required this.currency, this.myMemberId});
 
   @override
   Widget build(BuildContext context) {
     if (balances.isEmpty) {
       return Center(child: Text('Add expenses to see balances.', style: TextStyle(color: Colors.grey[500])));
     }
+    // Put "me" first
+    final sorted = List<Balance>.from(balances);
+    if (myMemberId != null) {
+      sorted.sort((a, b) {
+        if (a.member.id == myMemberId) return -1;
+        if (b.member.id == myMemberId) return 1;
+        return 0;
+      });
+    }
+
     return ListView.separated(
       padding: const EdgeInsets.all(16),
-      itemCount: balances.length,
+      itemCount: sorted.length,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (_, i) {
-        final b = balances[i];
+        final b = sorted[i];
+        final isMe = b.member.id == myMemberId;
         final isPositive = b.netBalance > 0.005;
         final isNegative = b.netBalance < -0.005;
         final color = isPositive
@@ -335,31 +443,29 @@ class _BalancesTab extends StatelessWidget {
             : isNegative
                 ? Colors.red[600]!
                 : Colors.grey[600]!;
-        final label = isPositive
-            ? 'gets back'
-            : isNegative
-                ? 'owes'
-                : 'settled';
+        final label = isPositive ? 'gets back' : isNegative ? 'owes' : 'settled';
 
         return Card(
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
-            side: BorderSide(color: color.withOpacity(0.3)),
+            side: BorderSide(color: isMe ? color : color.withValues(alpha: 0.3), width: isMe ? 2 : 1),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(children: [
               CircleAvatar(
                 radius: 20,
-                backgroundColor: color.withOpacity(0.12),
+                backgroundColor: color.withValues(alpha: 0.12),
                 child: Text(b.member.name[0].toUpperCase(),
                     style: TextStyle(color: color, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(b.member.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Row(children: [
+                    Text(isMe ? '${b.member.name} (you)' : b.member.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ]),
                   Text('$label  $currency ${b.netBalance.abs().toStringAsFixed(2)}',
                       style: TextStyle(color: color, fontSize: 13)),
                 ]),
