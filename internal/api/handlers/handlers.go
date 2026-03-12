@@ -253,6 +253,26 @@ func (h *Handler) APISettlements(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, settlements, err)
 }
 
+func (h *Handler) APIListPayments(w http.ResponseWriter, r *http.Request) {
+	payments, err := h.store.ListPayments(r.PathValue("id"))
+	writeJSON(w, payments, err)
+}
+
+func (h *Handler) APIRecordPayment(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		FromID string  `json:"from_id"`
+		ToID   string  `json:"to_id"`
+		Amount float64 `json:"amount"`
+		Note   string  `json:"note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	p, err := h.store.RecordPayment(r.PathValue("id"), body.FromID, body.ToID, body.Amount, body.Note)
+	writeJSON(w, p, err)
+}
+
 // --- helpers ---
 
 func (h *Handler) render(w http.ResponseWriter, name string, data any) {

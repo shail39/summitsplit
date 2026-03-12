@@ -64,4 +64,14 @@ CREATE TABLE IF NOT EXISTS expense_splits (
     amount      NUMERIC(12,2) NOT NULL,
     PRIMARY KEY (expense_id, member_id)
 );
+
+CREATE TABLE IF NOT EXISTS payments (
+    id         TEXT PRIMARY KEY,
+    trip_id    TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+    from_id    TEXT NOT NULL REFERENCES members(id),
+    to_id      TEXT NOT NULL REFERENCES members(id),
+    amount     NUMERIC(12,2) NOT NULL,
+    note       TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
 `

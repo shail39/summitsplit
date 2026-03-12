@@ -48,3 +48,14 @@ type Settlement struct {
 	To     Member  `json:"to"`
 	Amount float64 `json:"amount"`
 }
+
+// Payment records that someone has paid their debt
+type Payment struct {
+	ID        string    `json:"id"`
+	TripID    string    `json:"trip_id"`
+	FromID    string    `json:"from_id"`
+	ToID      string    `json:"to_id"`
+	Amount    float64   `json:"amount"`
+	Note      string    `json:"note,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+}

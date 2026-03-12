@@ -69,7 +69,7 @@ func (s *Store) ListExpenses(tripID string) ([]models.Expense, error) {
 	return expenses, rows.Err()
 }
 
-// Balances computes net balance for each member in a trip.
+// Balances computes net balance for each member in a trip, accounting for recorded payments.
 func (s *Store) Balances(tripID string) ([]models.Balance, error) {
 	members, err := s.ListMembers(tripID)
 	if err != nil {
@@ -79,9 +79,7 @@ func (s *Store) Balances(tripID string) ([]models.Balance, error) {
 	paid := make(map[string]float64)
 	owed := make(map[string]float64)
 
-	rows, err := s.db.Query(
-		`SELECT paid_by_id, amount FROM expenses WHERE trip_id = $1`, tripID,
-	)
+	rows, err := s.db.Query(`SELECT paid_by_id, amount FROM expenses WHERE trip_id = $1`, tripID)
 	if err != nil {
 		return nil, err
 	}
@@ -110,6 +108,16 @@ func (s *Store) Balances(tripID string) ([]models.Balance, error) {
 			return nil, err
 		}
 		owed[id] += amount
+	}
+
+	// Apply recorded payments: from pays to → from's net improves, to's net reduces
+	payments, err := s.ListPayments(tripID)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range payments {
+		paid[p.FromID] += p.Amount
+		paid[p.ToID] -= p.Amount
 	}
 
 	balances := make([]models.Balance, 0, len(members))
