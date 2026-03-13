@@ -243,6 +243,43 @@ func (h *Handler) APIAddExpense(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, e, err)
 }
 
+func (h *Handler) APIUpdateExpense(w http.ResponseWriter, r *http.Request) {
+	expenseID := r.PathValue("eid")
+	var body struct {
+		PaidByID    string                `json:"paid_by_id"`
+		Description string                `json:"description"`
+		Category    string                `json:"category"`
+		Amount      float64               `json:"amount"`
+		Date        string                `json:"date"`
+		Splits      []models.ExpenseSplit `json:"splits"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	date, _ := time.Parse("2006-01-02", body.Date)
+	e, err := h.store.UpdateExpense(expenseID, body.PaidByID, body.Description, body.Category, body.Amount, date, body.Splits)
+	writeJSON(w, e, err)
+}
+
+func (h *Handler) APIDeleteExpense(w http.ResponseWriter, r *http.Request) {
+	expenseID := r.PathValue("eid")
+	if err := h.store.DeleteExpense(expenseID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) APIDeleteMember(w http.ResponseWriter, r *http.Request) {
+	memberID := r.PathValue("mid")
+	if err := h.store.DeleteMember(memberID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *Handler) APIBalances(w http.ResponseWriter, r *http.Request) {
 	balances, err := h.store.Balances(r.PathValue("id"))
 	writeJSON(w, balances, err)

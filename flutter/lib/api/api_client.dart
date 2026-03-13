@@ -65,6 +65,33 @@ class ApiClient {
     _check(res);
   }
 
+  static Future<void> updateExpense(String tripId, String expenseId, String paidById, String description,
+      String category, double amount, DateTime date, List<Map<String, dynamic>> splits) async {
+    final res = await http.put(
+      Uri.parse('$baseUrl/trips/$tripId/expenses/$expenseId'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'paid_by_id': paidById,
+        'description': description,
+        'category': category,
+        'amount': amount,
+        'date': date.toIso8601String().substring(0, 10),
+        'splits': splits,
+      }),
+    );
+    _check(res);
+  }
+
+  static Future<void> deleteExpense(String tripId, String expenseId) async {
+    final res = await http.delete(Uri.parse('$baseUrl/trips/$tripId/expenses/$expenseId'));
+    _check(res);
+  }
+
+  static Future<void> deleteMember(String tripId, String memberId) async {
+    final res = await http.delete(Uri.parse('$baseUrl/trips/$tripId/members/$memberId'));
+    _check(res);
+  }
+
   // Balances & Settlements
   static Future<List<Balance>> getBalances(String tripId) async {
     final res = await http.get(Uri.parse('$baseUrl/trips/$tripId/balances'));

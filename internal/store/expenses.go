@@ -174,6 +174,61 @@ func (s *Store) Settlements(tripID string) ([]models.Settlement, error) {
 	return settlements, nil
 }
 
+func (s *Store) UpdateExpense(expenseID, paidByID, description, category string, amount float64, date time.Time, splits []models.ExpenseSplit) (*models.Expense, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(
+		`UPDATE expenses SET paid_by_id=$1, description=$2, amount=$3, category=$4, date=$5 WHERE id=$6`,
+		paidByID, description, amount, category, date, expenseID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("update expense: %w", err)
+	}
+
+	// Replace splits
+	_, err = tx.Exec(`DELETE FROM expense_splits WHERE expense_id=$1`, expenseID)
+	if err != nil {
+		return nil, fmt.Errorf("delete old splits: %w", err)
+	}
+	for _, sp := range splits {
+		_, err = tx.Exec(
+			`INSERT INTO expense_splits (expense_id, member_id, amount) VALUES ($1, $2, $3)`,
+			expenseID, sp.MemberID, sp.Amount,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("insert split: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	// Return updated expense
+	var e models.Expense
+	row := s.db.QueryRow(`SELECT id, trip_id, paid_by_id, description, amount, category, date, created_at FROM expenses WHERE id=$1`, expenseID)
+	if err := row.Scan(&e.ID, &e.TripID, &e.PaidByID, &e.Description, &e.Amount, &e.Category, &e.Date, &e.CreatedAt); err != nil {
+		return nil, err
+	}
+	return &e, nil
+}
+
+func (s *Store) DeleteExpense(expenseID string) error {
+	_, err := s.db.Exec(`DELETE FROM expense_splits WHERE expense_id=$1`, expenseID)
+	if err != nil {
+		return fmt.Errorf("delete splits: %w", err)
+	}
+	_, err = s.db.Exec(`DELETE FROM expenses WHERE id=$1`, expenseID)
+	if err != nil {
+		return fmt.Errorf("delete expense: %w", err)
+	}
+	return nil
+}
+
 func min(a, b float64) float64 {
 	if a < b {
 		return a

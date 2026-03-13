@@ -199,6 +199,9 @@ class _TripDetailScreenState extends State<TripDetailScreen>
             memberName: _memberName,
             onAddMember: () => _showAddMemberDialog(),
             onAddExpense: () => _goAddExpense(),
+            onDeleteMember: _deleteMember,
+            onEditExpense: _editExpense,
+            onDeleteExpense: _deleteExpense,
           ),
           _BalancesTab(balances: _balances, currency: _trip!.currency, myMemberId: _myMemberId),
           _SettleTab(
@@ -255,6 +258,73 @@ class _TripDetailScreenState extends State<TripDetailScreen>
     _load();
   }
 
+  Future<void> _deleteMember(Member m) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove Member'),
+        content: Text('Remove ${m.name} from this trip?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await ApiClient.deleteMember(widget.tripId, m.id);
+      _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
+  Future<void> _editExpense(Expense e) async {
+    await Navigator.push(context, MaterialPageRoute(
+      builder: (_) => AddExpenseScreen(
+        tripId: widget.tripId,
+        members: _members,
+        currency: _trip!.currency,
+        defaultPaidById: _myMemberId,
+        editExpense: e,
+      ),
+    ));
+    _load();
+  }
+
+  Future<void> _deleteExpense(Expense e) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Expense'),
+        content: Text('Delete "${e.description}" (${_trip!.currency} ${e.amount.toStringAsFixed(2)})?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await ApiClient.deleteExpense(widget.tripId, e.id);
+      _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
   Future<void> _markPaid(Settlement s) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -288,6 +358,9 @@ class _ExpensesTab extends StatelessWidget {
   final String Function(String) memberName;
   final VoidCallback onAddMember;
   final VoidCallback onAddExpense;
+  final void Function(Member) onDeleteMember;
+  final void Function(Expense) onEditExpense;
+  final void Function(Expense) onDeleteExpense;
 
   const _ExpensesTab({
     required this.trip,
@@ -297,6 +370,9 @@ class _ExpensesTab extends StatelessWidget {
     required this.memberName,
     required this.onAddMember,
     required this.onAddExpense,
+    required this.onDeleteMember,
+    required this.onEditExpense,
+    required this.onDeleteExpense,
   });
 
   @override
@@ -322,6 +398,8 @@ class _ExpensesTab extends StatelessWidget {
               label: Text(m.name),
               backgroundColor: m.id == myMemberId ? const Color(0xFF2d6a4f).withValues(alpha: 0.15) : null,
               side: m.id == myMemberId ? const BorderSide(color: Color(0xFF2d6a4f)) : null,
+              deleteIcon: const Icon(Icons.close, size: 16),
+              onDeleted: () => onDeleteMember(m),
             )).toList(),
           ),
         const Divider(height: 28),
@@ -342,6 +420,8 @@ class _ExpensesTab extends StatelessWidget {
                 currency: trip.currency,
                 paidByName: memberName(e.paidById),
                 isMe: e.paidById == myMemberId,
+                onEdit: () => onEditExpense(e),
+                onDelete: () => onDeleteExpense(e),
               )),
         const SizedBox(height: 80),
       ]),
@@ -363,8 +443,10 @@ class _ExpenseTile extends StatelessWidget {
   final String currency;
   final String paidByName;
   final bool isMe;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
-  const _ExpenseTile({required this.expense, required this.currency, required this.paidByName, this.isMe = false});
+  const _ExpenseTile({required this.expense, required this.currency, required this.paidByName, this.isMe = false, required this.onEdit, required this.onDelete});
 
   static const _categoryIcons = {
     'food': Icons.restaurant,
@@ -393,10 +475,28 @@ class _ExpenseTile extends StatelessWidget {
         title: Text(expense.description, style: const TextStyle(fontWeight: FontWeight.w500)),
         subtitle: Text('Paid by ${isMe ? "you" : paidByName} · ${_fmtDate(expense.date)}',
             style: const TextStyle(fontSize: 12)),
-        trailing: Text(
-          '$currency ${expense.amount.toStringAsFixed(2)}',
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '$currency ${expense.amount.toStringAsFixed(2)}',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            PopupMenuButton<String>(
+              padding: EdgeInsets.zero,
+              iconSize: 20,
+              onSelected: (v) {
+                if (v == 'edit') onEdit();
+                if (v == 'delete') onDelete();
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit, size: 18), SizedBox(width: 8), Text('Edit')])),
+                PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete, size: 18, color: Colors.red), SizedBox(width: 8), Text('Delete', style: TextStyle(color: Colors.red))])),
+              ],
+            ),
+          ],
         ),
+        onTap: onEdit,
       ),
     );
   }

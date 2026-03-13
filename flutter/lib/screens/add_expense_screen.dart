@@ -9,6 +9,7 @@ class AddExpenseScreen extends StatefulWidget {
   final List<Member> members;
   final String currency;
   final String? defaultPaidById;
+  final Expense? editExpense; // non-null = edit mode
 
   const AddExpenseScreen({
     super.key,
@@ -16,6 +17,7 @@ class AddExpenseScreen extends StatefulWidget {
     required this.members,
     required this.currency,
     this.defaultPaidById,
+    this.editExpense,
   });
 
   @override
@@ -37,16 +39,30 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   late Map<String, TextEditingController> _shareCtrls;
   late Map<String, TextEditingController> _pctCtrls;
 
+  bool get _isEditing => widget.editExpense != null;
+
   static const _categories = ['food', 'transport', 'accommodation', 'gear', 'other'];
 
   @override
   void initState() {
     super.initState();
-    _paidById = widget.defaultPaidById ?? (widget.members.isNotEmpty ? widget.members.first.id : null);
     _included = {for (var m in widget.members) m.id: true};
     _exactCtrls = {for (var m in widget.members) m.id: TextEditingController()};
     _shareCtrls = {for (var m in widget.members) m.id: TextEditingController(text: '1')};
     _pctCtrls = {for (var m in widget.members) m.id: TextEditingController()};
+
+    if (_isEditing) {
+      final e = widget.editExpense!;
+      _descCtrl.text = e.description;
+      _amountCtrl.text = e.amount.toStringAsFixed(2);
+      _paidById = e.paidById;
+      _category = e.category;
+      _date = e.date;
+      // Edit mode defaults to equal split (original split details aren't stored in Expense model)
+    } else {
+      _paidById = widget.defaultPaidById ?? (widget.members.isNotEmpty ? widget.members.first.id : null);
+    }
+
     _amountCtrl.addListener(() => setState(() {}));
   }
 
@@ -105,7 +121,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     final splits = _computeSplits().entries.where((e) => e.value > 0).map((e) => {'member_id': e.key, 'amount': e.value}).toList();
 
     try {
-      await ApiClient.addExpense(widget.tripId, _paidById!, _descCtrl.text.trim(), _category, _total, _date, splits);
+      if (_isEditing) {
+        await ApiClient.updateExpense(widget.tripId, widget.editExpense!.id, _paidById!, _descCtrl.text.trim(), _category, _total, _date, splits);
+      } else {
+        await ApiClient.addExpense(widget.tripId, _paidById!, _descCtrl.text.trim(), _category, _total, _date, splits);
+      }
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) _snack('Error: $e');
@@ -121,7 +141,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     final total = _total;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Expense')),
+      appBar: AppBar(title: Text(_isEditing ? 'Edit Expense' : 'Add Expense')),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -131,7 +151,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               controller: _descCtrl,
               decoration: const InputDecoration(labelText: 'Description *', border: OutlineInputBorder()),
               validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-              autofocus: true,
+              autofocus: !_isEditing,
             ),
             const SizedBox(height: 16),
             TextFormField(
@@ -265,7 +285,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             ElevatedButton(
               onPressed: _submit,
               style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
-              child: const Text('Save Expense', style: TextStyle(fontSize: 16)),
+              child: Text(_isEditing ? 'Update Expense' : 'Save Expense', style: const TextStyle(fontSize: 16)),
             ),
           ],
         ),
