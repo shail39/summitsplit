@@ -4,6 +4,24 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../api/api_client.dart';
 import '../models/models.dart';
 
+class _TripSummary {
+  final Trip trip;
+  final int memberCount;
+  final int expenseCount;
+  final double totalSpent;
+  final double? myBalance; // null if no identity set
+  final String? myName;
+
+  _TripSummary({
+    required this.trip,
+    required this.memberCount,
+    required this.expenseCount,
+    required this.totalSpent,
+    this.myBalance,
+    this.myName,
+  });
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -12,7 +30,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  List<Trip> _myTrips = [];
+  List<_TripSummary> _myTrips = [];
   bool _loading = true;
 
   @override
@@ -25,17 +43,52 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _loading = true);
     final prefs = await SharedPreferences.getInstance();
     final ids = prefs.getStringList('visited_trips') ?? [];
-    final trips = <Trip>[];
+    final summaries = <_TripSummary>[];
+
     for (final id in ids) {
       try {
-        trips.add(await ApiClient.getTrip(id));
+        final results = await Future.wait([
+          ApiClient.getTrip(id),
+          ApiClient.getMembers(id),
+          ApiClient.getExpenses(id),
+          ApiClient.getBalances(id),
+        ]);
+        final trip = results[0] as Trip;
+        final members = results[1] as List<Member>;
+        final expenses = results[2] as List<Expense>;
+        final balances = results[3] as List<Balance>;
+        final totalSpent = expenses.fold<double>(0, (sum, e) => sum + e.amount);
+
+        // Check if user has an identity for this trip
+        final myId = prefs.getString('identity_$id');
+        double? myBalance;
+        String? myName;
+        if (myId != null) {
+          for (final b in balances) {
+            if (b.member.id == myId) {
+              myBalance = b.netBalance;
+              myName = b.member.name;
+              break;
+            }
+          }
+        }
+
+        summaries.add(_TripSummary(
+          trip: trip,
+          memberCount: members.length,
+          expenseCount: expenses.length,
+          totalSpent: totalSpent,
+          myBalance: myBalance,
+          myName: myName,
+        ));
       } catch (_) {
-        // Trip may have been deleted — skip it
+        // Trip may have been deleted — skip
       }
     }
+
     if (mounted) {
       setState(() {
-        _myTrips = trips;
+        _myTrips = summaries;
         _loading = false;
       });
     }
@@ -46,7 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final ids = prefs.getStringList('visited_trips') ?? [];
     ids.remove(tripId);
     await prefs.setStringList('visited_trips', ids);
-    setState(() => _myTrips.removeWhere((t) => t.id == tripId));
+    setState(() => _myTrips.removeWhere((t) => t.trip.id == tripId));
   }
 
   @override
@@ -89,10 +142,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ]),
                       const SizedBox(height: 12),
-                      ..._myTrips.map((trip) => _TripCard(
-                            trip: trip,
-                            onTap: () => context.go('/trips/${trip.id}'),
-                            onRemove: () => _removeTrip(trip.id),
+                      ..._myTrips.map((s) => _TripCard(
+                            summary: s,
+                            onTap: () => context.go('/trips/${s.trip.id}'),
+                            onRemove: () => _removeTrip(s.trip.id),
                           )),
                       const SizedBox(height: 24),
                       OutlinedButton.icon(
@@ -229,17 +282,24 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ── Trip Card ──────────────────────────────────────────────────────
+// ── Trip Card with history ────────────────────────────────────────
 
 class _TripCard extends StatelessWidget {
-  final Trip trip;
+  final _TripSummary summary;
   final VoidCallback onTap;
   final VoidCallback onRemove;
 
-  const _TripCard({required this.trip, required this.onTap, required this.onRemove});
+  const _TripCard({required this.summary, required this.onTap, required this.onRemove});
 
   @override
   Widget build(BuildContext context) {
+    final s = summary;
+    final balanceColor = (s.myBalance ?? 0) > 0.005
+        ? const Color(0xFF2d6a4f)
+        : (s.myBalance ?? 0) < -0.005
+            ? Colors.red[600]!
+            : Colors.grey[600]!;
+
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 10),
@@ -251,39 +311,85 @@ class _TripCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(children: [
-            CircleAvatar(
-              backgroundColor: const Color(0xFF2d6a4f).withValues(alpha: 0.12),
-              child: const Icon(Icons.terrain, color: Color(0xFF2d6a4f), size: 20),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(trip.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-                if (trip.description.isNotEmpty)
-                  Text(trip.description, style: TextStyle(color: Colors.grey[600], fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
-                Text(trip.currency, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-              ]),
-            ),
-            PopupMenuButton<String>(
-              padding: EdgeInsets.zero,
-              iconSize: 20,
-              onSelected: (v) {
-                if (v == 'remove') onRemove();
-              },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'remove', child: Row(children: [
-                  Icon(Icons.remove_circle_outline, size: 18, color: Colors.red),
-                  SizedBox(width: 8),
-                  Text('Remove from list', style: TextStyle(color: Colors.red)),
-                ])),
-              ],
-            ),
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              CircleAvatar(
+                backgroundColor: const Color(0xFF2d6a4f).withValues(alpha: 0.12),
+                child: const Icon(Icons.terrain, color: Color(0xFF2d6a4f), size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(s.trip.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                  if (s.trip.description.isNotEmpty)
+                    Text(s.trip.description, style: TextStyle(color: Colors.grey[600], fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                ]),
+              ),
+              PopupMenuButton<String>(
+                padding: EdgeInsets.zero,
+                iconSize: 20,
+                onSelected: (v) {
+                  if (v == 'remove') onRemove();
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'remove', child: Row(children: [
+                    Icon(Icons.remove_circle_outline, size: 18, color: Colors.red),
+                    SizedBox(width: 8),
+                    Text('Remove from list', style: TextStyle(color: Colors.red)),
+                  ])),
+                ],
+              ),
+            ]),
+            const SizedBox(height: 12),
+            // Stats row
+            Row(children: [
+              _Stat(icon: Icons.people_outline, label: '${s.memberCount} members'),
+              const SizedBox(width: 16),
+              _Stat(icon: Icons.receipt_long_outlined, label: '${s.expenseCount} expenses'),
+              const SizedBox(width: 16),
+              _Stat(icon: Icons.payments_outlined, label: '${s.trip.currency} ${s.totalSpent.toStringAsFixed(2)}'),
+            ]),
+            // My balance
+            if (s.myBalance != null) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: balanceColor.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(
+                    s.myBalance! > 0.005
+                        ? '${s.myName ?? "You"}: gets back ${s.trip.currency} ${s.myBalance!.toStringAsFixed(2)}'
+                        : s.myBalance! < -0.005
+                            ? '${s.myName ?? "You"}: owes ${s.trip.currency} ${s.myBalance!.abs().toStringAsFixed(2)}'
+                            : '${s.myName ?? "You"}: settled up',
+                    style: TextStyle(color: balanceColor, fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
+                ]),
+              ),
+            ],
           ]),
         ),
       ),
     );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _Stat({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(icon, size: 14, color: Colors.grey[500]),
+      const SizedBox(width: 4),
+      Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+    ]);
   }
 }
 
