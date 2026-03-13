@@ -45,6 +45,10 @@ class _TripDetailScreenState extends State<TripDetailScreen>
     final prefs = await SharedPreferences.getInstance();
     _myMemberId = prefs.getString(_prefsKey);
     await _load();
+    // Save this trip to visited list
+    if (_trip != null) {
+      _saveVisitedTrip(prefs);
+    }
     // After loading, if no identity set and members exist, ask
     if (_myMemberId == null && _members.isNotEmpty && mounted) {
       _showIdentityPicker();
@@ -55,6 +59,14 @@ class _TripDetailScreenState extends State<TripDetailScreen>
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefsKey, memberId);
     setState(() => _myMemberId = memberId);
+  }
+
+  void _saveVisitedTrip(SharedPreferences prefs) {
+    final trips = prefs.getStringList('visited_trips') ?? [];
+    if (!trips.contains(widget.tripId)) {
+      trips.insert(0, widget.tripId);
+      prefs.setStringList('visited_trips', trips);
+    }
   }
 
   Future<void> _load() async {
