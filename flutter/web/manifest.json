@@ -1,11 +1,11 @@
 {
-    "name": "summitsplit_app",
-    "short_name": "summitsplit_app",
+    "name": "Summit Split",
+    "short_name": "Summit Split",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#6366f1",
+    "theme_color": "#6366f1",
+    "description": "Split trip expenses and settle up fairly.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

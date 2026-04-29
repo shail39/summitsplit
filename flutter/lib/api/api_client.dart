@@ -6,11 +6,11 @@ class ApiClient {
   static const String baseUrl = 'https://app.summitsplit.com/api';
 
   // Trips
-  static Future<Trip> createTrip(String name, String description, String currency) async {
+  static Future<Trip> createTrip(String name, String description, String currency, {String emoji = ''}) async {
     final res = await http.post(
       Uri.parse('$baseUrl/trips'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'name': name, 'description': description, 'currency': currency}),
+      body: jsonEncode({'name': name, 'description': description, 'currency': currency, 'emoji': emoji}),
     );
     _check(res);
     return Trip.fromJson(jsonDecode(res.body));
@@ -18,6 +18,16 @@ class ApiClient {
 
   static Future<Trip> getTrip(String id) async {
     final res = await http.get(Uri.parse('$baseUrl/trips/$id'));
+    _check(res);
+    return Trip.fromJson(jsonDecode(res.body));
+  }
+
+  static Future<Trip> updateTrip(String id, String name, String description, String currency, String emoji) async {
+    final res = await http.put(
+      Uri.parse('$baseUrl/trips/$id'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'name': name, 'description': description, 'currency': currency, 'emoji': emoji}),
+    );
     _check(res);
     return Trip.fromJson(jsonDecode(res.body));
   }
@@ -49,7 +59,7 @@ class ApiClient {
   }
 
   static Future<void> addExpense(String tripId, String paidById, String description,
-      String category, double amount, DateTime date, List<Map<String, dynamic>> splits) async {
+      String category, double amount, DateTime date, List<Map<String, dynamic>> splits, {String notes = ''}) async {
     final res = await http.post(
       Uri.parse('$baseUrl/trips/$tripId/expenses'),
       headers: {'Content-Type': 'application/json'},
@@ -57,6 +67,7 @@ class ApiClient {
         'paid_by_id': paidById,
         'description': description,
         'category': category,
+        'notes': notes,
         'amount': amount,
         'date': date.toIso8601String().substring(0, 10),
         'splits': splits,
@@ -66,7 +77,7 @@ class ApiClient {
   }
 
   static Future<void> updateExpense(String tripId, String expenseId, String paidById, String description,
-      String category, double amount, DateTime date, List<Map<String, dynamic>> splits) async {
+      String category, double amount, DateTime date, List<Map<String, dynamic>> splits, {String notes = ''}) async {
     final res = await http.put(
       Uri.parse('$baseUrl/trips/$tripId/expenses/$expenseId'),
       headers: {'Content-Type': 'application/json'},
@@ -74,6 +85,7 @@ class ApiClient {
         'paid_by_id': paidById,
         'description': description,
         'category': category,
+        'notes': notes,
         'amount': amount,
         'date': date.toIso8601String().substring(0, 10),
         'splits': splits,
@@ -116,6 +128,9 @@ class ApiClient {
     );
     _check(res);
   }
+
+  // Export CSV URL (for download)
+  static String exportCsvUrl(String tripId) => '$baseUrl/trips/$tripId/export.csv';
 
   static void _check(http.Response res) {
     if (res.statusCode >= 400) {

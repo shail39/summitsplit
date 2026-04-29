@@ -45,7 +45,8 @@ func (h *Handler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 	if currency == "" {
 		currency = "USD"
 	}
-	trip, err := h.store.CreateTrip(name, desc, currency)
+	emoji := r.FormValue("emoji")
+	trip, err := h.store.CreateTrip(name, desc, currency, emoji)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -131,7 +132,7 @@ func (h *Handler) NewExpenseForm(w http.ResponseWriter, r *http.Request) {
 		"Trip":       trip,
 		"Members":    members,
 		"Today":      time.Now().Format("2006-01-02"),
-		"Categories": []string{"gear", "food", "transport", "accommodation", "other"},
+		"Categories": []string{"food", "drinks", "transport", "accommodation", "gear", "activities", "entertainment", "shopping", "groceries", "health", "tips", "fees", "other"},
 	})
 }
 
@@ -156,7 +157,7 @@ func (h *Handler) AddExpense(w http.ResponseWriter, r *http.Request) {
 		splits = append(splits, models.ExpenseSplit{MemberID: m.ID, Amount: splitAmnt})
 	}
 
-	if _, err := h.store.AddExpense(id, paidBy, desc, category, amount, date, splits); err != nil {
+	if _, err := h.store.AddExpense(id, paidBy, desc, category, "", amount, date, splits); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -185,6 +186,7 @@ func (h *Handler) APICreateTrip(w http.ResponseWriter, r *http.Request) {
 		Name        string `json:"name"`
 		Description string `json:"description"`
 		Currency    string `json:"currency"`
+		Emoji       string `json:"emoji"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -193,13 +195,64 @@ func (h *Handler) APICreateTrip(w http.ResponseWriter, r *http.Request) {
 	if body.Currency == "" {
 		body.Currency = "USD"
 	}
-	trip, err := h.store.CreateTrip(body.Name, body.Description, body.Currency)
+	trip, err := h.store.CreateTrip(body.Name, body.Description, body.Currency, body.Emoji)
 	writeJSON(w, trip, err)
 }
 
 func (h *Handler) APIGetTrip(w http.ResponseWriter, r *http.Request) {
 	trip, err := h.store.GetTrip(r.PathValue("id"))
 	writeJSON(w, trip, err)
+}
+
+func (h *Handler) APIUpdateTrip(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var body struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Currency    string `json:"currency"`
+		Emoji       string `json:"emoji"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	trip, err := h.store.UpdateTrip(id, body.Name, body.Description, body.Currency, body.Emoji)
+	writeJSON(w, trip, err)
+}
+
+func (h *Handler) APIExportCSV(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	trip, err := h.store.GetTrip(id)
+	if err != nil {
+		http.Error(w, "trip not found", http.StatusNotFound)
+		return
+	}
+	members, _ := h.store.ListMembers(id)
+	expenses, _ := h.store.ListExpenses(id)
+	balances, _ := h.store.Balances(id)
+
+	memberMap := make(map[string]string, len(members))
+	for _, m := range members {
+		memberMap[m.ID] = m.Name
+	}
+
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s_expenses.csv"`, trip.Name))
+
+	// Header
+	fmt.Fprintf(w, "Date,Description,Category,Amount (%s),Paid By,Notes\n", trip.Currency)
+	for _, e := range expenses {
+		notes := strings.ReplaceAll(e.Notes, "\"", "\"\"")
+		desc := strings.ReplaceAll(e.Description, "\"", "\"\"")
+		fmt.Fprintf(w, "%s,\"%s\",%s,%.2f,%s,\"%s\"\n",
+			e.Date.Format("2006-01-02"), desc, e.Category, e.Amount, memberMap[e.PaidByID], notes)
+	}
+
+	// Blank line + balances
+	fmt.Fprintf(w, "\nMember,Total Paid,Total Owed,Net Balance\n")
+	for _, b := range balances {
+		fmt.Fprintf(w, "%s,%.2f,%.2f,%.2f\n", b.Member.Name, b.TotalPaid, b.TotalOwed, b.NetBalance)
+	}
 }
 
 func (h *Handler) APIListMembers(w http.ResponseWriter, r *http.Request) {
@@ -230,6 +283,7 @@ func (h *Handler) APIAddExpense(w http.ResponseWriter, r *http.Request) {
 		PaidByID    string                `json:"paid_by_id"`
 		Description string                `json:"description"`
 		Category    string                `json:"category"`
+		Notes       string                `json:"notes"`
 		Amount      float64               `json:"amount"`
 		Date        string                `json:"date"`
 		Splits      []models.ExpenseSplit `json:"splits"`
@@ -239,7 +293,7 @@ func (h *Handler) APIAddExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	date, _ := time.Parse("2006-01-02", body.Date)
-	e, err := h.store.AddExpense(r.PathValue("id"), body.PaidByID, body.Description, body.Category, body.Amount, date, body.Splits)
+	e, err := h.store.AddExpense(r.PathValue("id"), body.PaidByID, body.Description, body.Category, body.Notes, body.Amount, date, body.Splits)
 	writeJSON(w, e, err)
 }
 
@@ -249,6 +303,7 @@ func (h *Handler) APIUpdateExpense(w http.ResponseWriter, r *http.Request) {
 		PaidByID    string                `json:"paid_by_id"`
 		Description string                `json:"description"`
 		Category    string                `json:"category"`
+		Notes       string                `json:"notes"`
 		Amount      float64               `json:"amount"`
 		Date        string                `json:"date"`
 		Splits      []models.ExpenseSplit `json:"splits"`
@@ -258,7 +313,7 @@ func (h *Handler) APIUpdateExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	date, _ := time.Parse("2006-01-02", body.Date)
-	e, err := h.store.UpdateExpense(expenseID, body.PaidByID, body.Description, body.Category, body.Amount, date, body.Splits)
+	e, err := h.store.UpdateExpense(expenseID, body.PaidByID, body.Description, body.Category, body.Notes, body.Amount, date, body.Splits)
 	writeJSON(w, e, err)
 }
 

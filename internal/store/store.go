@@ -27,8 +27,13 @@ func (s *Store) Close() error {
 }
 
 func (s *Store) Migrate() error {
-	_, err := s.db.Exec(schema)
-	return err
+	if _, err := s.db.Exec(schema); err != nil {
+		return err
+	}
+	// Migrations for existing databases
+	s.db.Exec(`ALTER TABLE trips ADD COLUMN IF NOT EXISTS emoji TEXT NOT NULL DEFAULT ''`)
+	s.db.Exec(`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT ''`)
+	return nil
 }
 
 const schema = `
@@ -37,6 +42,7 @@ CREATE TABLE IF NOT EXISTS trips (
     name        TEXT NOT NULL,
     description TEXT,
     currency    TEXT NOT NULL DEFAULT 'USD',
+    emoji       TEXT NOT NULL DEFAULT '',
     created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -54,6 +60,7 @@ CREATE TABLE IF NOT EXISTS expenses (
     description TEXT NOT NULL,
     amount      NUMERIC(12,2) NOT NULL,
     category    TEXT NOT NULL DEFAULT 'other',
+    notes       TEXT NOT NULL DEFAULT '',
     date        TIMESTAMPTZ NOT NULL,
     created_at  TIMESTAMPTZ DEFAULT NOW()
 );

@@ -27,6 +27,8 @@ func NewRouter(db *store.Store) http.Handler {
 	mux.HandleFunc("GET /api/trips", h.APIListTrips)
 	mux.HandleFunc("POST /api/trips", h.APICreateTrip)
 	mux.HandleFunc("GET /api/trips/{id}", h.APIGetTrip)
+	mux.HandleFunc("PUT /api/trips/{id}", h.APIUpdateTrip)
+	mux.HandleFunc("GET /api/trips/{id}/export.csv", h.APIExportCSV)
 	mux.HandleFunc("GET /api/trips/{id}/members", h.APIListMembers)
 	mux.HandleFunc("POST /api/trips/{id}/members", h.APIAddMember)
 	mux.HandleFunc("GET /api/trips/{id}/expenses", h.APIListExpenses)

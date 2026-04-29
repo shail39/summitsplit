@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api/api_client.dart';
+import '../main.dart' show themeNotifier;
 import '../models/models.dart';
+import '../services/user_profile.dart';
 
 class _TripSummary {
   final Trip trip;
@@ -32,11 +34,18 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<_TripSummary> _myTrips = [];
   bool _loading = true;
+  UserProfile? _profile;
 
   @override
   void initState() {
     super.initState();
+    _loadProfile();
     _loadMyTrips();
+  }
+
+  Future<void> _loadProfile() async {
+    final profile = await UserProfile.load();
+    if (mounted) setState(() => _profile = profile);
   }
 
   Future<void> _loadMyTrips() async {
@@ -107,7 +116,38 @@ class _HomeScreenState extends State<HomeScreen> {
     final hasTrips = _myTrips.isNotEmpty;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('SummitSplit')),
+      appBar: AppBar(
+        title: const Text('Summit Split'),
+        actions: [
+          if (_profile != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: GestureDetector(
+                onTap: _showProfileDialog,
+                child: Chip(
+                  avatar: CircleAvatar(
+                    backgroundColor: Colors.white,
+                    child: Text(_profile!.name[0].toUpperCase(), style: const TextStyle(color: Color(0xFF6366f1), fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+                  label: Text(_profile!.name, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                  backgroundColor: Colors.white24,
+                  side: BorderSide.none,
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ),
+          IconButton(
+            icon: Icon(
+              themeNotifier.mode == ThemeMode.dark ? Icons.dark_mode
+                : themeNotifier.mode == ThemeMode.light ? Icons.light_mode
+                : Icons.brightness_auto,
+            ),
+            tooltip: 'Toggle theme',
+            onPressed: () => setState(() => themeNotifier.cycle()),
+          ),
+        ],
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 480),
@@ -154,7 +194,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         label: const Text('Join a Trip'),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          side: const BorderSide(color: Color(0xFF2d6a4f)),
+                          side: const BorderSide(color: Color(0xFF6366f1)),
                         ),
                       ),
                     ] else ...[
@@ -181,39 +221,123 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _showProfileDialog() {
+    final nameCtrl = TextEditingController(text: _profile?.name ?? '');
+    final emailCtrl = TextEditingController(text: _profile?.email ?? '');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Your Profile'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(labelText: 'Name', border: OutlineInputBorder()),
+              textCapitalization: TextCapitalization.words,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: emailCtrl,
+              decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
+              keyboardType: TextInputType.emailAddress,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameCtrl.text.trim();
+              final email = emailCtrl.text.trim().toLowerCase();
+              if (name.isEmpty || email.isEmpty) return;
+              await UserProfile.save(name, email);
+              Navigator.pop(ctx);
+              _loadProfile();
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static const _tripEmojis = [
+    '\u{26F0}', '\u{1F3D4}', '\u{1F3D6}', '\u{1F3DD}', '\u{1F30D}', '\u{2708}',
+    '\u{1F697}', '\u{1F6F3}', '\u{1F3D5}', '\u{1F3E0}', '\u{1F37D}', '\u{1F389}',
+    '\u{1F3C4}', '\u{26F7}', '\u{1F6B6}', '\u{1F3DB}', '\u{1F3A4}', '\u{1F3AC}',
+    '\u{26FA}', '\u{1F3F0}', '\u{1F30A}', '\u{2B50}', '\u{1F525}', '\u{1F334}',
+    '\u{1F3E8}', '\u{1F682}', '\u{1F6B2}', '\u{26F5}', '\u{1F3CA}', '\u{26F3}',
+    '\u{1F3A8}', '\u{1F3B6}', '\u{2764}', '\u{1F4B0}', '\u{1F393}', '\u{1F3C6}',
+  ];
+
   void _showCreateDialog(BuildContext context) {
     final nameCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     String currency = 'USD';
+    String selectedEmoji = _tripEmojis[0];
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
+        builder: (ctx, setDialogState) => AlertDialog(
           title: const Text('New Trip'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Trip name *'),
-                autofocus: true,
+          content: SizedBox(
+            width: 300,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(labelText: 'Trip name *'),
+                    autofocus: true,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: descCtrl,
+                    decoration: const InputDecoration(labelText: 'Description (optional)'),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: currency,
+                    decoration: const InputDecoration(labelText: 'Currency'),
+                    items: ['USD', 'EUR', 'GBP', 'INR', 'CAD', 'AUD']
+                        .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                        .toList(),
+                    onChanged: (v) => setDialogState(() => currency = v!),
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Trip icon', style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: _tripEmojis.map((e) => GestureDetector(
+                      onTap: () => setDialogState(() => selectedEmoji = e),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: selectedEmoji == e
+                              ? const Color(0xFF6366f1).withValues(alpha: 0.15)
+                              : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                          border: selectedEmoji == e
+                              ? Border.all(color: const Color(0xFF6366f1), width: 2)
+                              : null,
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(e, style: const TextStyle(fontSize: 18)),
+                      ),
+                    )).toList(),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: descCtrl,
-                decoration: const InputDecoration(labelText: 'Description (optional)'),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: currency,
-                decoration: const InputDecoration(labelText: 'Currency'),
-                items: ['USD', 'EUR', 'GBP', 'INR', 'CAD', 'AUD']
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                    .toList(),
-                onChanged: (v) => setState(() => currency = v!),
-              ),
-            ],
+            ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
@@ -223,7 +347,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.pop(ctx);
                 try {
                   final trip = await ApiClient.createTrip(
-                    nameCtrl.text.trim(), descCtrl.text.trim(), currency);
+                    nameCtrl.text.trim(), descCtrl.text.trim(), currency, emoji: selectedEmoji);
+                  // Auto-add creator as first member
+                  final profile = await UserProfile.load();
+                  if (profile != null) {
+                    final member = await ApiClient.addMember(trip.id, profile.name, profile.email);
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setString('identity_${trip.id}', member.id);
+                  }
                   if (context.mounted) context.go('/trips/${trip.id}');
                 } catch (e) {
                   if (context.mounted) {
@@ -295,7 +426,7 @@ class _TripCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = summary;
     final balanceColor = (s.myBalance ?? 0) > 0.005
-        ? const Color(0xFF2d6a4f)
+        ? const Color(0xFF6366f1)
         : (s.myBalance ?? 0) < -0.005
             ? Colors.red[600]!
             : Colors.grey[600]!;
@@ -315,8 +446,11 @@ class _TripCard extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               CircleAvatar(
-                backgroundColor: const Color(0xFF2d6a4f).withValues(alpha: 0.12),
-                child: const Icon(Icons.terrain, color: Color(0xFF2d6a4f), size: 20),
+                backgroundColor: const Color(0xFF6366f1).withValues(alpha: 0.12),
+                child: Text(
+                  s.trip.emoji.isNotEmpty ? s.trip.emoji : '\u{26F0}',
+                  style: const TextStyle(fontSize: 20),
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(

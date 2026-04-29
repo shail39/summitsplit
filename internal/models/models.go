@@ -7,7 +7,8 @@ type Trip struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	Currency    string    `json:"currency"`
-CreatedAt   time.Time `json:"created_at"`
+	Emoji       string    `json:"emoji"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type Member struct {
@@ -23,7 +24,8 @@ type Expense struct {
 	PaidByID    string    `json:"paid_by_id"`
 	Description string    `json:"description"`
 	Amount      float64   `json:"amount"`
-	Category    string    `json:"category"` // gear, food, transport, accommodation, other
+	Category    string    `json:"category"`
+	Notes       string    `json:"notes,omitempty"`
 	Date        time.Time `json:"date"`
 	CreatedAt   time.Time `json:"created_at"`
 }

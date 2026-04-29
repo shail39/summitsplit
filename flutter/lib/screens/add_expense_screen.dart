@@ -28,6 +28,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   final _formKey = GlobalKey<FormState>();
   final _descCtrl = TextEditingController();
   final _amountCtrl = TextEditingController();
+  final _notesCtrl = TextEditingController();
 
   String? _paidById;
   String _category = 'other';
@@ -41,7 +42,23 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   bool get _isEditing => widget.editExpense != null;
 
-  static const _categories = ['food', 'transport', 'accommodation', 'gear', 'other'];
+  static const _categories = ['food', 'drinks', 'transport', 'accommodation', 'gear', 'activities', 'entertainment', 'shopping', 'groceries', 'health', 'tips', 'fees', 'other'];
+
+  static const _categoryEmojis = {
+    'food': '\u{1F354}',         // 🍔
+    'drinks': '\u{1F37B}',       // 🍻
+    'transport': '\u{1F697}',    // 🚗
+    'accommodation': '\u{1F3E8}', // 🏨
+    'gear': '\u{1F392}',         // 🎒
+    'activities': '\u{1F3BF}',   // 🎿
+    'entertainment': '\u{1F3AC}', // 🎬
+    'shopping': '\u{1F6CD}',     // 🛍
+    'groceries': '\u{1F6D2}',    // 🛒
+    'health': '\u{1FA7A}',       // 🩺
+    'tips': '\u{1F4B0}',         // 💰
+    'fees': '\u{1F4B3}',         // 💳
+    'other': '\u{1F4CB}',        // 📋
+  };
 
   @override
   void initState() {
@@ -55,10 +72,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       final e = widget.editExpense!;
       _descCtrl.text = e.description;
       _amountCtrl.text = e.amount.toStringAsFixed(2);
+      _notesCtrl.text = e.notes;
       _paidById = e.paidById;
       _category = e.category;
       _date = e.date;
-      // Edit mode defaults to equal split (original split details aren't stored in Expense model)
     } else {
       _paidById = widget.defaultPaidById ?? (widget.members.isNotEmpty ? widget.members.first.id : null);
     }
@@ -70,6 +87,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   void dispose() {
     _descCtrl.dispose();
     _amountCtrl.dispose();
+    _notesCtrl.dispose();
     for (final c in _exactCtrls.values) c.dispose();
     for (final c in _shareCtrls.values) c.dispose();
     for (final c in _pctCtrls.values) c.dispose();
@@ -122,9 +140,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
     try {
       if (_isEditing) {
-        await ApiClient.updateExpense(widget.tripId, widget.editExpense!.id, _paidById!, _descCtrl.text.trim(), _category, _total, _date, splits);
+        await ApiClient.updateExpense(widget.tripId, widget.editExpense!.id, _paidById!, _descCtrl.text.trim(), _category, _total, _date, splits, notes: _notesCtrl.text.trim());
       } else {
-        await ApiClient.addExpense(widget.tripId, _paidById!, _descCtrl.text.trim(), _category, _total, _date, splits);
+        await ApiClient.addExpense(widget.tripId, _paidById!, _descCtrl.text.trim(), _category, _total, _date, splits, notes: _notesCtrl.text.trim());
       }
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -175,7 +193,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             DropdownButtonFormField<String>(
               value: _category,
               decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
-              items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c[0].toUpperCase() + c.substring(1)))).toList(),
+              items: _categories.map((c) => DropdownMenuItem(value: c, child: Text('${_categoryEmojis[c] ?? ''} ${c[0].toUpperCase()}${c.substring(1)}'))).toList(),
               onChanged: (v) => setState(() => _category = v!),
             ),
             const SizedBox(height: 16),
@@ -189,6 +207,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 child: Text('${_date.year}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}'),
               ),
             ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _notesCtrl,
+              decoration: const InputDecoration(labelText: 'Notes (optional)', border: OutlineInputBorder(), hintText: 'e.g. receipt details, split reason...'),
+              maxLines: 2,
+              textCapitalization: TextCapitalization.sentences,
+            ),
             const SizedBox(height: 24),
             const Divider(),
             const SizedBox(height: 12),
@@ -198,6 +223,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             const SizedBox(height: 8),
             SegmentedButton<SplitMode>(
               selected: {_splitMode},
+              showSelectedIcon: false,
               onSelectionChanged: (s) => setState(() => _splitMode = s.first),
               segments: const [
                 ButtonSegment(value: SplitMode.equal, label: Text('Equal')),

@@ -8,7 +8,7 @@ import (
 	"summitsplit.com/internal/models"
 )
 
-func (s *Store) AddExpense(tripID, paidByID, description, category string, amount float64, date time.Time, splits []models.ExpenseSplit) (*models.Expense, error) {
+func (s *Store) AddExpense(tripID, paidByID, description, category, notes string, amount float64, date time.Time, splits []models.ExpenseSplit) (*models.Expense, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
@@ -22,13 +22,14 @@ func (s *Store) AddExpense(tripID, paidByID, description, category string, amoun
 		Description: description,
 		Amount:      amount,
 		Category:    category,
+		Notes:       notes,
 		Date:        date,
 		CreatedAt:   time.Now(),
 	}
 
 	_, err = tx.Exec(
-		`INSERT INTO expenses (id, trip_id, paid_by_id, description, amount, category, date, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		e.ID, e.TripID, e.PaidByID, e.Description, e.Amount, e.Category, e.Date, e.CreatedAt,
+		`INSERT INTO expenses (id, trip_id, paid_by_id, description, amount, category, notes, date, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		e.ID, e.TripID, e.PaidByID, e.Description, e.Amount, e.Category, e.Notes, e.Date, e.CreatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("insert expense: %w", err)
@@ -50,7 +51,7 @@ func (s *Store) AddExpense(tripID, paidByID, description, category string, amoun
 
 func (s *Store) ListExpenses(tripID string) ([]models.Expense, error) {
 	rows, err := s.db.Query(
-		`SELECT id, trip_id, paid_by_id, description, amount, category, date, created_at FROM expenses WHERE trip_id = $1 ORDER BY date DESC`,
+		`SELECT id, trip_id, paid_by_id, description, amount, category, COALESCE(notes,''), date, created_at FROM expenses WHERE trip_id = $1 ORDER BY date DESC`,
 		tripID,
 	)
 	if err != nil {
@@ -61,7 +62,7 @@ func (s *Store) ListExpenses(tripID string) ([]models.Expense, error) {
 	var expenses []models.Expense
 	for rows.Next() {
 		var e models.Expense
-		if err := rows.Scan(&e.ID, &e.TripID, &e.PaidByID, &e.Description, &e.Amount, &e.Category, &e.Date, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.TripID, &e.PaidByID, &e.Description, &e.Amount, &e.Category, &e.Notes, &e.Date, &e.CreatedAt); err != nil {
 			return nil, err
 		}
 		expenses = append(expenses, e)
@@ -174,7 +175,7 @@ func (s *Store) Settlements(tripID string) ([]models.Settlement, error) {
 	return settlements, nil
 }
 
-func (s *Store) UpdateExpense(expenseID, paidByID, description, category string, amount float64, date time.Time, splits []models.ExpenseSplit) (*models.Expense, error) {
+func (s *Store) UpdateExpense(expenseID, paidByID, description, category, notes string, amount float64, date time.Time, splits []models.ExpenseSplit) (*models.Expense, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
@@ -182,8 +183,8 @@ func (s *Store) UpdateExpense(expenseID, paidByID, description, category string,
 	defer tx.Rollback()
 
 	_, err = tx.Exec(
-		`UPDATE expenses SET paid_by_id=$1, description=$2, amount=$3, category=$4, date=$5 WHERE id=$6`,
-		paidByID, description, amount, category, date, expenseID,
+		`UPDATE expenses SET paid_by_id=$1, description=$2, amount=$3, category=$4, notes=$5, date=$6 WHERE id=$7`,
+		paidByID, description, amount, category, notes, date, expenseID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("update expense: %w", err)
@@ -210,8 +211,8 @@ func (s *Store) UpdateExpense(expenseID, paidByID, description, category string,
 
 	// Return updated expense
 	var e models.Expense
-	row := s.db.QueryRow(`SELECT id, trip_id, paid_by_id, description, amount, category, date, created_at FROM expenses WHERE id=$1`, expenseID)
-	if err := row.Scan(&e.ID, &e.TripID, &e.PaidByID, &e.Description, &e.Amount, &e.Category, &e.Date, &e.CreatedAt); err != nil {
+	row := s.db.QueryRow(`SELECT id, trip_id, paid_by_id, description, amount, category, COALESCE(notes,''), date, created_at FROM expenses WHERE id=$1`, expenseID)
+	if err := row.Scan(&e.ID, &e.TripID, &e.PaidByID, &e.Description, &e.Amount, &e.Category, &e.Notes, &e.Date, &e.CreatedAt); err != nil {
 		return nil, err
 	}
 	return &e, nil

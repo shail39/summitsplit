@@ -3,14 +3,16 @@ class Trip {
   final String name;
   final String description;
   final String currency;
+  final String emoji;
 
-  Trip({required this.id, required this.name, required this.description, required this.currency});
+  Trip({required this.id, required this.name, required this.description, required this.currency, this.emoji = ''});
 
   factory Trip.fromJson(Map<String, dynamic> j) => Trip(
         id: j['id'],
         name: j['name'],
         description: j['description'] ?? '',
         currency: j['currency'] ?? 'USD',
+        emoji: j['emoji'] ?? '',
       );
 }
 
@@ -35,6 +37,7 @@ class Expense {
   final String description;
   final double amount;
   final String category;
+  final String notes;
   final String paidById;
   final DateTime date;
 
@@ -43,6 +46,7 @@ class Expense {
     required this.description,
     required this.amount,
     required this.category,
+    this.notes = '',
     required this.paidById,
     required this.date,
   });
@@ -52,6 +56,7 @@ class Expense {
         description: j['description'],
         amount: (j['amount'] as num).toDouble(),
         category: j['category'] ?? 'other',
+        notes: j['notes'] ?? '',
         paidById: j['paid_by_id'],
         date: DateTime.parse(j['date']),
       );
